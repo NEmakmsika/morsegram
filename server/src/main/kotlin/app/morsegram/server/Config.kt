@@ -17,20 +17,25 @@ data class Config(
             smtp = env["SMTP_HOST"]?.takeIf { it.isNotBlank() }?.let { host ->
                 SmtpConfig(
                     host = host,
-                    port = env["SMTP_PORT"]?.toInt() ?: 587,
+                    port = env["SMTP_PORT"]?.takeIf { it.isNotBlank() }?.toInt() ?: 25,
                     user = env["SMTP_USER"].orEmpty(),
                     password = env["SMTP_PASSWORD"].orEmpty(),
-                    from = env["MAIL_FROM"] ?: env["SMTP_USER"].orEmpty(),
+                    from = listOf(env["MAIL_FROM"], env["SMTP_USER"])
+                        .firstOrNull { !it.isNullOrBlank() }
+                        ?: "noreply@${env["MAIL_DOMAIN"] ?: "localhost"}",
                 )
             },
         )
     }
 }
 
+/** Без логина — свой почтовый сервер в Docker; с логином — внешний SMTP (например, Gmail). */
 data class SmtpConfig(
     val host: String,
     val port: Int,
     val user: String,
     val password: String,
     val from: String,
-)
+) {
+    val authenticated: Boolean get() = user.isNotBlank()
+}

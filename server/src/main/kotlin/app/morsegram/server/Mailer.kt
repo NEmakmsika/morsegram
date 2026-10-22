@@ -12,16 +12,19 @@ fun interface Mailer {
     fun sendCode(to: String, code: String)
 }
 
-/** Настоящие письма через SMTP (например, Gmail с паролем приложения). */
+/** Настоящие письма через SMTP: свой почтовый сервер (mail/) или внешний вроде Gmail. */
 class SmtpMailer(private val config: SmtpConfig) : Mailer {
 
     private val session: Session = Session.getInstance(
         Properties().apply {
             put("mail.smtp.host", config.host)
             put("mail.smtp.port", config.port.toString())
-            put("mail.smtp.auth", "true")
-            put("mail.smtp.starttls.enable", "true")
-            put("mail.smtp.starttls.required", "true")
+            // Внутри Docker письмо идёт к своему серверу без пароля и шифрования,
+            // внешнему SMTP — только с логином и по TLS.
+            put("mail.smtp.auth", config.authenticated.toString())
+            put("mail.smtp.starttls.enable", config.authenticated.toString())
+            put("mail.smtp.starttls.required", config.authenticated.toString())
+            put("mail.from", config.from)
             put("mail.smtp.connectiontimeout", "10000")
             put("mail.smtp.timeout", "10000")
         },
@@ -38,7 +41,11 @@ class SmtpMailer(private val config: SmtpConfig) : Mailer {
                 "UTF-8",
             )
         }
-        Transport.send(message, config.user, config.password)
+        if (config.authenticated) {
+            Transport.send(message, config.user, config.password)
+        } else {
+            Transport.send(message)
+        }
     }
 }
 

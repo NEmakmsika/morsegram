@@ -38,7 +38,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import app.morsegram.AppGraph
 import app.morsegram.data.UserSettings
+import app.morsegram.ui.auth.ErrorMessage
 import app.morsegram.ui.auth.isValidNickname
+import app.morsegram.ui.errorText
 import app.morsegram.ui.components.GradientButton
 import app.morsegram.ui.components.MorseTextField
 import app.morsegram.ui.components.ProfileAvatar
@@ -56,7 +58,8 @@ fun ProfileForm(
     var name by rememberSaveable { mutableStateOf(settings.displayName) }
     var nickname by rememberSaveable { mutableStateOf(settings.nickname) }
     var bio by rememberSaveable { mutableStateOf(settings.bio) }
-    var saving by rememberSaveable { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
 
     val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) scope.launch { AppGraph.settings.setAvatar(uri) }
@@ -133,16 +136,23 @@ fun ProfileForm(
             label = "О себе",
             singleLine = false,
         )
+        ErrorMessage(error)
         GradientButton(
             text = buttonText,
             enabled = canSave,
             loading = saving,
             onClick = {
                 saving = true
+                error = null
                 scope.launch {
-                    AppGraph.settings.updateProfile(name, nickname, bio)
-                    saving = false
-                    onSaved()
+                    try {
+                        AppGraph.account.updateProfile(name, nickname, bio)
+                        saving = false
+                        onSaved()
+                    } catch (e: Exception) {
+                        saving = false
+                        error = errorText(e)
+                    }
                 }
             },
         )

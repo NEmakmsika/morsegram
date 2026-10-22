@@ -18,6 +18,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val settings by AppGraph.settings.settings.collectAsStateWithLifecycle(initialValue = null)
+            settings?.let(AppGraph::update)
             val mode = settings?.themeMode ?: ThemeMode.SYSTEM
             val dark = when (mode) {
                 ThemeMode.SYSTEM -> isSystemInDarkTheme()

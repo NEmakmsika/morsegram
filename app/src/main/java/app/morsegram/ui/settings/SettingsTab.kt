@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,7 +45,7 @@ import app.morsegram.ui.theme.Cyan
 import app.morsegram.ui.theme.Pink
 import app.morsegram.ui.theme.Violet
 
-enum class SettingsPage { PROFILE, APPEARANCE, PRIVACY, DEVICES, NOTIFICATIONS }
+enum class SettingsPage { PROFILE, APPEARANCE, PRIVACY, DEVICES, NOTIFICATIONS, SERVER }
 
 private val Green = Color(0xFF34D399)
 private val Orange = Color(0xFFF59E0B)
@@ -87,6 +88,13 @@ fun SettingsTab(
                         SettingsItem(Icons.Filled.Lock, listOf(Green, Cyan), "Конфиденциальность и шифрование", onClick = { onOpen(SettingsPage.PRIVACY) })
                         SettingsItem(Icons.Filled.Notifications, listOf(Orange, Pink), "Уведомления", onClick = { onOpen(SettingsPage.NOTIFICATIONS) })
                         SettingsItem(Icons.Filled.Phone, listOf(Cyan, Green), "Устройства", onClick = { onOpen(SettingsPage.DEVICES) })
+                        SettingsItem(
+                            icon = Icons.Filled.Settings,
+                            colors = listOf(Violet, Cyan),
+                            title = "Сервер",
+                            subtitle = if (settings.demo) "Демо-режим" else settings.serverUrl.removePrefix("https://"),
+                            onClick = { onOpen(SettingsPage.SERVER) },
+                        )
                     }
                 }
             }

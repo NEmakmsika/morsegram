@@ -28,6 +28,7 @@ import app.morsegram.ui.settings.DevicesScreen
 import app.morsegram.ui.settings.NotificationsScreen
 import app.morsegram.ui.settings.PrivacyScreen
 import app.morsegram.ui.settings.ProfileEditScreen
+import app.morsegram.ui.settings.ServerScreen
 import app.morsegram.ui.settings.SettingsPage
 import kotlinx.coroutines.launch
 
@@ -74,6 +75,7 @@ fun MorsegramApp(settings: UserSettings) {
     ) {
         composable(Routes.WELCOME) {
             WelcomeScreen(
+                demo = settings.demo,
                 onRegister = { navController.navigate(Routes.REGISTER) },
                 onLogin = { navController.navigate(Routes.LOGIN) },
             )
@@ -86,10 +88,8 @@ fun MorsegramApp(settings: UserSettings) {
         }
         composable(Routes.LOGIN) {
             LoginScreen(
-                onLoggedIn = { email ->
-                    scope.launch { AppGraph.settings.logIn(email) }
-                    navController.goToMain()
-                },
+                onLoggedIn = { navController.goToMain() },
+                onNeedsVerification = { email -> navController.navigate(Routes.code(email)) },
                 onBack = { navController.popBackStack() },
             )
         }
@@ -98,7 +98,6 @@ fun MorsegramApp(settings: UserSettings) {
             CodeScreen(
                 email = email,
                 onCodeConfirmed = {
-                    scope.launch { AppGraph.settings.logIn(email) }
                     navController.navigate(Routes.PROFILE_SETUP) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -116,12 +115,12 @@ fun MorsegramApp(settings: UserSettings) {
             MainScreen(
                 settings = settings,
                 onOpenChat = { userId ->
-                    FakeChatRepository.openChat(userId)
+                    if (AppGraph.demo) FakeChatRepository.openChat(userId)
                     navController.navigate(Routes.chat(userId))
                 },
                 onOpenSettings = { page -> navController.navigate(Routes.settings(page)) },
                 onLogOut = {
-                    scope.launch { AppGraph.settings.logOut() }
+                    scope.launch { AppGraph.account.logout() }
                     navController.navigate(Routes.WELCOME) {
                         popUpTo(0) { inclusive = true }
                     }
@@ -143,6 +142,7 @@ fun MorsegramApp(settings: UserSettings) {
                 SettingsPage.PRIVACY -> PrivacyScreen(back)
                 SettingsPage.DEVICES -> DevicesScreen(back)
                 SettingsPage.NOTIFICATIONS -> NotificationsScreen(settings, back)
+                SettingsPage.SERVER -> ServerScreen(settings, back)
             }
         }
     }

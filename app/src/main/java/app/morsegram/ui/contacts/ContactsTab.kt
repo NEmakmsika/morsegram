@@ -25,8 +25,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -34,27 +36,33 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.morsegram.data.FakeChatRepository
+import app.morsegram.AppGraph
 import app.morsegram.ui.components.SearchField
 import app.morsegram.ui.components.SectionTitle
 import app.morsegram.ui.components.StaggeredRow
 import app.morsegram.ui.components.UserRow
+import app.morsegram.ui.components.rememberPeopleSearch
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ContactsTab(onOpenChat: (userId: String) -> Unit, modifier: Modifier = Modifier) {
-    val contactIds by FakeChatRepository.contacts.collectAsStateWithLifecycle()
+    val people = AppGraph.people
+    val contacts by people.contacts.collectAsStateWithLifecycle()
     var query by rememberSaveable { mutableStateOf("") }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val scope = rememberCoroutineScope()
 
-    val contacts = FakeChatRepository.users.filter { it.id in contactIds }.sortedBy { it.name }
+    LaunchedEffect(people) { runCatching { people.refreshContacts() } }
+
+    val contactIds = contacts.map { it.id }.toSet()
     val q = query.trim().removePrefix("@").lowercase()
     val shownContacts = if (q.isEmpty()) {
         contacts
     } else {
         contacts.filter { it.name.lowercase().contains(q) || it.nickname.lowercase().contains(q) }
     }
-    val others = FakeChatRepository.search(query).filter { it.id !in contactIds }
+    val others = rememberPeopleSearch(query).filter { it.id !in contactIds }
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -82,7 +90,11 @@ fun ContactsTab(onOpenChat: (userId: String) -> Unit, modifier: Modifier = Modif
                         UserRow(
                             user = user,
                             onClick = { onOpenChat(user.id) },
-                            trailing = { AddContactButton(added = false) { FakeChatRepository.addContact(user.id) } },
+                            trailing = {
+                                AddContactButton(added = false) {
+                                    scope.launch { runCatching { people.addContact(user.id) } }
+                                }
+                            },
                         )
                     }
                 }

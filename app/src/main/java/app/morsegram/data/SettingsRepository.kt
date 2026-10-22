@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import app.morsegram.BuildConfig
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -23,8 +24,13 @@ enum class ThemeMode(val title: String) {
     BLACK("Чёрная"),
 }
 
+const val DEMO_SERVER = "demo"
+
 data class UserSettings(
     val loggedIn: Boolean = false,
+    /** Пусто — сервер по умолчанию, [DEMO_SERVER] — демо-режим без сервера. */
+    val server: String = "",
+    val token: String = "",
     val email: String = "",
     val displayName: String = "",
     val nickname: String = "",
@@ -33,7 +39,10 @@ data class UserSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val notifications: Boolean = true,
     val messagePreview: Boolean = true,
-)
+) {
+    val demo: Boolean get() = server == DEMO_SERVER
+    val serverUrl: String get() = if (server.isBlank() || demo) BuildConfig.DEFAULT_SERVER else server
+}
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
@@ -42,6 +51,8 @@ class SettingsRepository(private val context: Context) {
 
     private object Keys {
         val loggedIn = booleanPreferencesKey("logged_in")
+        val server = stringPreferencesKey("server")
+        val token = stringPreferencesKey("token")
         val email = stringPreferencesKey("email")
         val displayName = stringPreferencesKey("display_name")
         val nickname = stringPreferencesKey("nickname")
@@ -56,15 +67,26 @@ class SettingsRepository(private val context: Context) {
 
     val settings: Flow<UserSettings> = context.dataStore.data.map { it.toSettings() }
 
-    suspend fun logIn(email: String) = context.dataStore.edit {
+    /** Сохраняем вход. Токен пока лежит в DataStore; в части 4 переедет в Android Keystore. */
+    suspend fun logIn(email: String, token: String = "") = context.dataStore.edit {
         it[Keys.loggedIn] = true
         it[Keys.email] = email
+        it[Keys.token] = token
     }
 
+    /** Выход стирает всё, кроме выбранного сервера и темы. */
     suspend fun logOut() {
-        context.dataStore.edit { it.clear() }
+        context.dataStore.edit { prefs ->
+            val server = prefs[Keys.server]
+            val theme = prefs[Keys.themeMode]
+            prefs.clear()
+            server?.let { prefs[Keys.server] = it }
+            theme?.let { prefs[Keys.themeMode] = it }
+        }
         withContext(Dispatchers.IO) { avatarFile.delete() }
     }
+
+    suspend fun setServer(server: String) = context.dataStore.edit { it[Keys.server] = server.trim() }
 
     suspend fun updateProfile(displayName: String, nickname: String, bio: String) = context.dataStore.edit {
         it[Keys.displayName] = displayName.trim()
@@ -109,6 +131,8 @@ class SettingsRepository(private val context: Context) {
 
     private fun Preferences.toSettings() = UserSettings(
         loggedIn = this[Keys.loggedIn] ?: false,
+        server = this[Keys.server].orEmpty(),
+        token = this[Keys.token].orEmpty(),
         email = this[Keys.email].orEmpty(),
         displayName = this[Keys.displayName].orEmpty(),
         nickname = this[Keys.nickname].orEmpty(),

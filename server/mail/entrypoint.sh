@@ -61,7 +61,7 @@ postconf -e \
   "smtpd_milters = inet:127.0.0.1:8891" \
   "non_smtpd_milters = inet:127.0.0.1:8891" \
   "milter_default_action = tempfail" \
-  "transport_maps = inline:{ $MAIL_DOMAIN = discard: }" \
+  "transport_maps = inline:{$MAIL_DOMAIN=discard:}" \
   "maximal_queue_lifetime = 1h" \
   "bounce_queue_lifetime = 1h" \
   "message_size_limit = 1048576" \

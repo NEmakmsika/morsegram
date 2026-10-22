@@ -28,3 +28,35 @@ jobs:
 
       - name: Сборка Docker-образа
         run: docker build -t morsegram-server .
+
+      - name: Почтовый сервер
+        run: |
+          docker build -t morsegram-mail mail
+          docker run -d --name mail -e MAIL_DOMAIN=example.com morsegram-mail
+          IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' mail)"
+          for i in $(seq 1 30); do
+            (exec 3<>/dev/tcp/$IP/25) 2>/dev/null && break
+            sleep 1
+          done
+          docker exec mail grep -q '^v=DKIM1; k=rsa; p=MII' /etc/opendkim/keys/dns-record.txt
+          # Не даём письму уйти наружу: оно остаётся в очереди, и мы проверяем подпись DKIM.
+          docker exec mail sh -c 'postconf -e defer_transports=smtp && postfix reload'
+          python3 - "$IP" <<'PY'
+          import smtplib, sys
+          from email.message import EmailMessage
+          msg = EmailMessage()
+          msg["From"] = "Morsegram <noreply@example.com>"
+          msg["To"] = "test@example.org"
+          msg["Subject"] = "test"
+          msg.set_content("123456")
+          with smtplib.SMTP(sys.argv[1], 25, timeout=20) as s:
+              s.send_message(msg)
+          PY
+          sleep 3
+          ID="$(docker exec mail sh -c "postqueue -j | head -1" | python3 -c 'import json,sys; print(json.load(sys.stdin)["queue_id"])')"
+          docker exec mail postcat -hq "$ID" | tee /tmp/headers.txt
+          grep -q 'DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/simple; d=example.com; s=mail' /tmp/headers.txt
+
+      - name: Логи почтового сервера
+        if: always()
+        run: docker logs mail || true

@@ -21,15 +21,29 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mail:
+        condition: service_started
     environment:
       DATABASE_URL: jdbc:postgresql://db:5432/morsegram
       DATABASE_USER: morsegram
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
+      # По умолчанию письма отправляет свой почтовый сервер (сервис mail ниже).
+      SMTP_HOST: ${SMTP_HOST:-mail}
+      SMTP_PORT: ${SMTP_PORT:-25}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_DOMAIN: ${DOMAIN}
+
+  # Свой почтовый сервер: только отправляет письма с кодами от noreply@DOMAIN.
+  # Порт 25 наружу не открыт, письма он принимает только от сервиса server.
+  mail:
+    build: ./mail
+    restart: unless-stopped
+    environment:
+      MAIL_DOMAIN: ${DOMAIN}
+    volumes:
+      - mail-keys:/etc/opendkim/keys
 
   # Caddy сам получает HTTPS-сертификат для домена и пересылает запросы серверу.
   caddy:
@@ -49,3 +63,4 @@ services:
 volumes:
   db-data:
   caddy-data:
+  mail-keys:

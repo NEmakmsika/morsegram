@@ -1,0 +1,51 @@
+# Запуск на сервере: docker compose up -d --build
+# Перед этим скопируй .env.example в .env и заполни его.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: morsegram
+      POSTGRES_USER: morsegram
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?Задай DATABASE_PASSWORD в .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U morsegram"]
+      interval: 5s
+      retries: 10
+
+  server:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/morsegram
+      DATABASE_USER: morsegram
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+
+  # Caddy сам получает HTTPS-сертификат для домена и пересылает запросы серверу.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?Задай DOMAIN в .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+volumes:
+  db-data:
+  caddy-data:

@@ -134,14 +134,18 @@ fun ChatScreen(chatId: String, onBack: () -> Unit) {
                     }
                 }
             }
-            Composer(
-                text = draft,
-                onTextChange = { draft = it },
-                onSend = {
-                    viewModel.send(draft)
-                    draft = ""
-                },
-            )
+            if (viewModel.canSend) {
+                Composer(
+                    text = draft,
+                    onTextChange = { draft = it },
+                    onSend = {
+                        viewModel.send(draft)
+                        draft = ""
+                    },
+                )
+            } else {
+                EncryptionPendingNotice()
+            }
         }
     }
 }
@@ -239,6 +243,28 @@ private fun TypingBubble(modifier: Modifier = Modifier) {
         ) {
             TypingDots()
         }
+    }
+}
+
+@Composable
+private fun EncryptionPendingNotice() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(12.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            "Отправка сообщений включится вместе со сквозным шифрованием — уже скоро.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

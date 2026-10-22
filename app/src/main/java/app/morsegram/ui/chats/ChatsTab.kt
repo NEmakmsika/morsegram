@@ -27,6 +27,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.morsegram.AppGraph
 import app.morsegram.data.Chat
 import app.morsegram.data.FakeChatRepository
 import app.morsegram.ui.components.Avatar
@@ -45,19 +47,23 @@ import app.morsegram.ui.components.SearchField
 import app.morsegram.ui.components.SectionTitle
 import app.morsegram.ui.components.StaggeredRow
 import app.morsegram.ui.components.UserRow
+import app.morsegram.ui.components.rememberPeopleSearch
 import app.morsegram.ui.formatTime
+import kotlinx.coroutines.flow.flowOf
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatsTab(onOpenChat: (userId: String) -> Unit, modifier: Modifier = Modifier) {
-    val chats by FakeChatRepository.chats.collectAsStateWithLifecycle(initialValue = emptyList())
+    // С настоящим сервером переписка появится вместе с шифрованием (часть 4).
+    val chatsFlow = remember { if (AppGraph.demo) FakeChatRepository.chats else flowOf(emptyList()) }
+    val chats by chatsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var query by rememberSaveable { mutableStateOf("") }
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     val q = query.trim().removePrefix("@").lowercase()
     val foundChats = if (q.isEmpty()) chats else chats.filter { it.title.lowercase().contains(q) }
     val chatIds = chats.map { it.id }.toSet()
-    val globalResults = FakeChatRepository.search(query).filter { it.id !in chatIds }
+    val globalResults = rememberPeopleSearch(query).filter { it.id !in chatIds }
 
     Scaffold(
         modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -95,6 +101,17 @@ fun ChatsTab(onOpenChat: (userId: String) -> Unit, modifier: Modifier = Modifier
                     StaggeredRow(index, Modifier.animateItem()) {
                         UserRow(user, onClick = { onOpenChat(user.id) })
                     }
+                }
+            }
+            if (q.isEmpty() && chats.isEmpty()) {
+                item(key = "no-chats") {
+                    Text(
+                        "Чатов пока нет. Найди друзей по @нику в поиске выше.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                    )
                 }
             }
             if (q.isNotEmpty() && foundChats.isEmpty() && globalResults.isEmpty()) {

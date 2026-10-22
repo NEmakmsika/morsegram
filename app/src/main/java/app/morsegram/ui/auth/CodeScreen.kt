@@ -32,8 +32,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,12 +47,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import app.morsegram.AppGraph
 import app.morsegram.ui.components.AnimatedBackground
 import app.morsegram.ui.components.Entrance
 import app.morsegram.ui.theme.BrandGradient
+import app.morsegram.ui.errorText
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-/** Пока сервера нет, подходит любой код из 6 цифр. Как только введена последняя цифра — входим. */
+private const val RESEND_SECONDS = 60
+
+/** Как только введена последняя цифра — проверяем код на сервере. */
 @Composable
 fun CodeScreen(
     email: String,
@@ -58,14 +65,43 @@ fun CodeScreen(
     onChangeEmail: () -> Unit,
 ) {
     var code by rememberSaveable { mutableStateOf("") }
-    val checking = isValidCode(code)
+    var checking by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var resendIn by rememberSaveable { mutableIntStateOf(RESEND_SECONDS) }
+    val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
-    LaunchedEffect(checking) {
-        if (checking) {
-            delay(800)
+
+    // Обратный отсчёт до «Отправить код ещё раз».
+    LaunchedEffect(resendIn) {
+        if (resendIn > 0) {
+            delay(1000)
+            resendIn -= 1
+        }
+    }
+
+    fun check(value: String) = scope.launch {
+        checking = true
+        error = null
+        try {
+            AppGraph.account.verify(email, value)
+            checking = false
             onCodeConfirmed()
+        } catch (e: Exception) {
+            checking = false
+            error = errorText(e)
+            code = ""
+        }
+    }
+
+    fun resend() = scope.launch {
+        error = null
+        try {
+            AppGraph.account.resend(email)
+            resendIn = RESEND_SECONDS
+        } catch (e: Exception) {
+            error = errorText(e)
         }
     }
 
@@ -101,7 +137,10 @@ fun CodeScreen(
                 BasicTextField(
                     value = code,
                     onValueChange = { input ->
-                        if (!checking) code = input.filter { it.isDigit() }.take(CODE_LENGTH)
+                        if (!checking) {
+                            code = input.filter { it.isDigit() }.take(CODE_LENGTH)
+                            if (isValidCode(code)) check(code)
+                        }
                     },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     modifier = Modifier.focusRequester(focusRequester),
@@ -117,7 +156,9 @@ fun CodeScreen(
                     },
                 )
             }
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(16.dp))
+            ErrorMessage(error)
+            Spacer(Modifier.height(16.dp))
             Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
                 AnimatedContent(
                     targetState = checking,
@@ -133,7 +174,12 @@ fun CodeScreen(
                             Text("Проверяем код…", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
-                        TextButton(onClick = onChangeEmail) { Text("Другая почта") }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            TextButton(onClick = onChangeEmail) { Text("Другая почта") }
+                            TextButton(onClick = { resend() }, enabled = resendIn == 0) {
+                                Text(if (resendIn > 0) "Новый код через $resendIn с" else "Отправить ещё раз")
+                            }
+                        }
                     }
                 }
             }

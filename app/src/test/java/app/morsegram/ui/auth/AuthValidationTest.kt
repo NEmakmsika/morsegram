@@ -28,4 +28,20 @@ class AuthValidationTest {
         assertFalse(isValidCode("1234567"))
         assertFalse(isValidCode("12a456"))
     }
+
+    @Test
+    fun passwordNeedsEightCharacters() {
+        assertTrue(isValidPassword("12345678"))
+        assertFalse(isValidPassword("1234567"))
+    }
+
+    @Test
+    fun nicknameFollowsTelegramRules() {
+        assertTrue(isValidNickname("anna_k"))
+        assertTrue(isValidNickname("@max_morse"))
+        assertFalse(isValidNickname("ann"))
+        assertFalse(isValidNickname("1anna"))
+        assertFalse(isValidNickname("анна_к"))
+        assertFalse(isValidNickname("anna-k"))
+    }
 }

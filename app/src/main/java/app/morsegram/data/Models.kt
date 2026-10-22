@@ -1,5 +1,11 @@
 package app.morsegram.data
 
+data class User(
+    val id: String,
+    val name: String,
+    val nickname: String,
+)
+
 data class Chat(
     val id: String,
     val title: String,

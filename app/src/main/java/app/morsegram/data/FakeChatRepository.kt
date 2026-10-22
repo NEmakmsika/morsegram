@@ -2,12 +2,16 @@ package app.morsegram.data
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
 /**
- * Заглушка вместо сервера: чаты и сообщения живут только в памяти телефона
- * и пропадают при перезапуске. На этапе 3 её заменит настоящий сервер.
+ * Заглушка вместо сервера: пользователи, контакты и сообщения живут только в памяти
+ * телефона и пропадают при перезапуске. На этапе 3 её заменит настоящий сервер.
+ * Id чата совпадает с id собеседника.
  */
 object FakeChatRepository {
 
@@ -15,12 +19,21 @@ object FakeChatRepository {
 
     private val start = System.currentTimeMillis()
 
-    private val titles = mapOf(
-        "anna" to "Анна",
-        "boris" to "Борис",
-        "vika" to "Вика",
-        "gosha" to "Гоша",
+    /** Все «зарегистрированные» пользователи — по ним работает глобальный поиск. */
+    val users = listOf(
+        User("anna", "Анна Котова", "anna_k"),
+        User("boris", "Борис", "borisdev"),
+        User("vika", "Вика", "vika_morse"),
+        User("gosha", "Гоша Миронов", "gosha_m"),
+        User("dima", "Дима", "dmitry"),
+        User("lena", "Лена Арт", "lena_art"),
+        User("max", "Макс", "max_morse"),
     )
+
+    private val _contacts = MutableStateFlow(setOf("anna", "boris", "vika", "gosha"))
+    val contacts: StateFlow<Set<String>> = _contacts.asStateFlow()
+
+    private val openedChats = MutableStateFlow(emptySet<String>())
 
     private val messages = MutableStateFlow(
         listOf(
@@ -41,14 +54,38 @@ object FakeChatRepository {
         "Ахах 😄",
     )
 
-    val chats: Flow<List<Chat>> = messages.map { all ->
-        titles.mapNotNull { (id, title) ->
-            val last = all.lastOrNull { it.chatId == id } ?: return@mapNotNull null
-            Chat(id, title, last.text, last.time, last.fromMe)
+    val chats: Flow<List<Chat>> = combine(messages, openedChats) { all, opened ->
+        val ids = all.map { it.chatId }.toSet() + opened
+        ids.mapNotNull { id ->
+            val user = user(id) ?: return@mapNotNull null
+            val last = all.lastOrNull { it.chatId == id }
+            Chat(
+                id = id,
+                title = user.name,
+                lastMessage = last?.text ?: "Нет сообщений",
+                lastTime = last?.time ?: 0,
+                lastFromMe = last?.fromMe ?: false,
+            )
         }.sortedByDescending { it.lastTime }
     }
 
-    fun title(chatId: String): String = titles[chatId] ?: chatId
+    fun user(id: String): User? = users.firstOrNull { it.id == id }
+
+    fun title(chatId: String): String = user(chatId)?.name ?: chatId
+
+    /** Ищем по имени и по нику, «@» в начале запроса можно не писать. */
+    fun search(query: String): List<User> {
+        val q = query.trim().removePrefix("@").lowercase()
+        if (q.isEmpty()) return emptyList()
+        return users.filter { it.name.lowercase().contains(q) || it.nickname.lowercase().contains(q) }
+    }
+
+    fun addContact(userId: String) = _contacts.update { it + userId }
+
+    fun removeContact(userId: String) = _contacts.update { it - userId }
+
+    /** Чат появляется в списке, даже если в нём ещё нет сообщений. */
+    fun openChat(userId: String) = openedChats.update { it + userId }
 
     fun messages(chatId: String): Flow<List<Message>> =
         messages.map { all -> all.filter { it.chatId == chatId } }
